@@ -3,6 +3,7 @@
 
 'use strict';
 
+
 // Begin sample SPA application
 
 // Default config. Properties here match the names of query parameters in the URL
@@ -235,8 +236,109 @@ function submitSigninForm() {
   .then(function(transaction) {
     if (transaction.status === 'SUCCESS') {
       return authClient.session.setCookieAndRedirect(transaction.sessionToken, config.appUri + '&getTokens=true');
+    } else if (transaction.status === 'MFA_REQUIRED') {
+      console.log('MFA Required');
+      console.log(transaction.factors);
+      
+      //check for question
+      var questionFactor = transaction.factors.find(function(factor) {
+        return factor.provider === 'OKTA' && factor.factorType === 'question';
+      });
+      
+      if (questionFactor) {
+        console.log(questionFactor);
+        console.log(questionFactor.profile);
+        // console.log("Question verify");
+        var answer = prompt(questionFactor.profile.questionText);
+        questionFactor.verify({
+          answer: answer
+        }).then(function(verifyResult) {
+          console.log('factor verify result: ' + verifyResult.status);
+          // answer = prompt('pause');
+          return authClient.session.setCookieAndRedirect(verifyResult.sessionToken, config.appUri + '&getTokens=true');
+        })
+        .catch(function(err) {
+          showError(err);
+        });
+      }
+
+      //SMS
+      var smsFactor = transaction.factors.find(function(factor) {
+        return factor.provider === 'OKTA' && factor.factorType === 'sms';
+      });
+      
+      if (smsFactor) {
+        console.log("smsFactor verify");
+        smsFactor.verify()
+        .then(function(verifyChallenge) {
+          console.log(verifyChallenge);
+          var smsCode = prompt('Enter SMS Code: ');
+          console.log(smsCode);
+
+          smsFactor.verify({
+            passCode: smsCode
+          }).then(function(verifyResult) {
+            console.log('SMS factor verify result: ' + verifyResult.status);
+            return authClient.session.setCookieAndRedirect(verifyResult.sessionToken, config.appUri + '&getTokens=true');
+          })
+          .catch(err => {
+            showError(err);
+          });
+        })
+        .catch(function(err) {
+          showError(err);
+        });
+      }
+
+       //Okta Verify-Push
+       var oktaPushFactor = transaction.factors.find(function(factor) {
+        return factor.provider === 'OKTA' && factor.factorType === 'push';
+      });
+      
+      if (oktaPushFactor) {
+        console.log("oktaPush verify");
+        oktaPushFactor.verify()
+        .then(async function(verifyChallenge) {
+          console.log(verifyChallenge);
+
+          // while (true) { !!!! poll keeps polling on its own until a timeout/success/failure, no need to loop
+            // await new Promise(r => setTimeout(r, 5000));
+            console.log('calling poll');
+            verifyChallenge.poll()
+            .then(pollResult => {
+              console.log(pollResult.status);
+              
+              if (pollResult.status === 'SUCCESS') {
+                console.log(pollResult);
+                return authClient.session.setCookieAndRedirect(pollResult.sessionToken, config.appUri + '&getTokens=true');
+              } else if (pollResult.status === 'MFA_CHALLENGE') {
+                if (pollResult.factorResult === 'TIMEOUT') {
+                  throw "MFA CHALLENGE TIMEOUT";
+               } else if (pollResult.factorResult === 'REJECTED') {
+                throw "MFA CHALLENGE REJECTED";
+                } else {
+                  console.log('status = MFA-CHALLENGE, factorResult = ' + pollResult.factorResult);
+                } 
+              } else {
+                console.log('status = ' + pollResult.status);
+              }
+            })
+            .catch(err => {
+              console.log('error: ' + err);
+              showError(err);
+            });
+          // }
+          
+        })
+        .catch(function(err) {
+          showError(err);
+        });
+
+      }
+
+    } else {
+      throw new Error('We cannot handle the ' + transaction.status + ' status');
     }
-    throw new Error('We cannot handle the ' + transaction.status + ' status');
   })
   .catch(function(err) {
     showError(err);
