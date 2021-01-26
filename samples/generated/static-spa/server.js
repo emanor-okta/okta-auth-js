@@ -8,7 +8,9 @@ const port = '8080';
 const authJSAssets = path.resolve(path.dirname(require.resolve('@okta/okta-auth-js')), '..', '..', 'dist');
 
 app.get('/implicit/callback', function(req, res, next) {
+  var t = prompt('jsdfj');
   req.url = '/';
+  console.log('next()');
   next();
 });
 

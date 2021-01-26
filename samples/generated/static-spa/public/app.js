@@ -61,8 +61,13 @@ function main() {
 
   createAuthClient();
 
+  // console.log(JSON.stringify(authClient.authStateManager, null, 2));
+  var doesThisWork = prompt('start');
+  
   // Subscribe to authState change event. Logic based on authState is done here.
   authClient.authStateManager.subscribe(function(authState) {
+    console.log(authState);
+    var doesThisWork = prompt('updateAuthState ' + config.getTokens);
     if (!authState.isAuthenticated) {
       // If not authenticated, reset values related to user session
       userInfo = null;
